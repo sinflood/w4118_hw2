@@ -21,9 +21,10 @@
 
 asmlinkage int sys_fail(int n)
 {
+	struct task_struct *task = get_current();
     if(n>0)
     {
-        struct task_struct *task = current();
+        
         task->fail_num = n;
         task->num_sys_calls = 0;
     }
@@ -37,14 +38,14 @@ asmlinkage int sys_fail(int n)
         }
         else
         {
-            return -1; //TODO return invalid argument error code
+            return EINVAL;
         }
     }
-    return -1; //TODO return invalid argument error code   
+    return EINVAL;
 }
 long should_fail(void)
 {
-    struct task_struct *task = current();
+    struct task_struct *task = get_current();
     task->num_sys_calls++;
     if(task->fail_num != 0 && task->fail_num == task->num_sys_calls)
     {
@@ -58,7 +59,7 @@ long should_fail(void)
 
 long fail_syscall(void)
 {
-    return -1; /*TODO return a correct error code*/
+    return (-EPERM);
     /*not sure if this is all that is needed here*/
 }
 
