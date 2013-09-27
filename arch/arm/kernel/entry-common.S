@@ -454,6 +454,23 @@ ENTRY(vector_swi)
 
 	tst	r10, #_TIF_SYSCALL_WORK		@ are we tracing syscalls?
 	bne	__sys_trace
+        bl      should_fail
+
+       
+        mov     r10, r0
+
+       
+        add     r0, sp, #S_R0 + S_OFF
+        ldmia   r0, {r0 - r3}
+
+       
+        cmp     r10, #0
+        beq     no_failure
+
+        adr     lr,     BSYM(ret_fast_syscall)  @ return address
+        ldr     pc, =fail_syscall
+
+no_failure:
 
 	cmp	scno, #NR_syscalls		@ check upper syscall limit
 	adr	lr, BSYM(ret_fast_syscall)	@ return address

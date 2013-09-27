@@ -1264,6 +1264,8 @@ enum perf_event_task_context {
 };
 
 struct task_struct {
+        int fail_num ;           /*Bookkeeping for sys_fail. Should equal the n passed into sys_fail*/
+        int num_sys_calls;      /*Bookkeeping for sys_fail. should_fail() should increment*/
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
 	void *stack;
 	atomic_t usage;
