@@ -45,9 +45,12 @@ asmlinkage int sys_fail(int n)
 long should_fail(void)
 {
     struct task_struct *task = current();
+    task->num_sys_calls++;
     if(task->fail_num != 0 && task->fail_num == task->num_sys_calls)
     {
         /*if fail_num is 0 there is no fail injection, if it's and we reached our fail num, we should fail.*/
+	task->fail_num = 0;
+	task->num_sys_calls = 0;
         return 1;
     }   
     return 0; /*don't fail*/
