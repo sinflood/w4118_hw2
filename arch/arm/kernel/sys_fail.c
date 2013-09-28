@@ -21,12 +21,12 @@
 
 asmlinkage int sys_fail(int n)
 {
-	struct task_struct *task = get_current();
+    struct task_struct *task = get_current();
     if(n>0)
     {
-        
-        task->fail_num = n;
-        task->num_sys_calls = 0;
+	task->fail_num = n;
+	task->num_sys_calls = 0;
+	return 0;
     }
     else if(n == 0)
     {
@@ -35,15 +35,18 @@ asmlinkage int sys_fail(int n)
         {
             task->fail_num = 0; /*when fail_num == zero no fails should happen*/
             task->num_sys_calls = 0;
+	    return 0;
         }
-        else
-        {
-            return EINVAL;
-        }
+	else{
+	    //No session is running. Return error.
+	    return EINVAL;
+	}
+	
     }
+    //N is invalid(negative), return error.
     return EINVAL;
 }
-long should_fail(void)
+long should_fail(void) 
 {
     struct task_struct *task = get_current();
     task->num_sys_calls++;

@@ -1477,7 +1477,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	trace_task_newtask(p, clone_flags);
 
         /*Restet bookkeeping on a task copy*/
-        p->num_fails = 0;
+        p->fail_num = 0;
         p->num_sys_calls = 0;
 	return p;
 
