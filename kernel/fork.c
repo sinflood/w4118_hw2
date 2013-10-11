@@ -11,6 +11,8 @@
  * management can be a bitch. See 'mm/memory.c': 'copy_page_range()'
  */
 
+#include <linux/netlock.h>
+
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/unistd.h>
@@ -1475,7 +1477,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	perf_event_fork(p);
 
 	trace_task_newtask(p, clone_flags);
-
+	p->type_lock = NET_LOCK_N;
 	return p;
 
 bad_fork_free_pid:
