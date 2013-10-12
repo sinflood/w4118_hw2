@@ -5,11 +5,13 @@
 #include <linux/wait.h>
 
 struct network_struct {
-  int num_readers;
-  int num_writers;
+  int num_current_readers;
+  int num_current_writers;
   spinlock_t lock;
   wait_queue_head_t readers_queue;
   wait_queue_head_t writers_queue;
+  int num_waiting_readers;
+  int num_waiting_writers;
 };
 
 enum __netlock_t{
