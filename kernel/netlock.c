@@ -33,8 +33,11 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
 	
 	// Case: Writer
 	if ( type == NET_LOCK_E ) 
-	{			
-		add_wait_queue(network.writers_queue,&writers_wait);
+	{
+		/*
+		*  add the task to the wait queue with the exclusive flag
+		*/
+		add_wait_queue_exclusive(network.writers_queue,&writers_wait);
 		//the writer waits for the while condition to be false
 		network.num_waiting_writers++;	
 		
@@ -76,6 +79,7 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
 	// Case: Reader
 	else
 	{	
+		// add the task to the wait queue with the non-exclusive flag
 		add_wait_queue(network.readers_queue,&readers_wait);
 		//the reader waits for the while condition to be false
 		network.num_waiting_readers++;	
@@ -145,6 +149,10 @@ asmlinkage long sys_netlock_release (void)
 		{
 			//TODO not sure where to place this unlock
 			spin_unlock_irq(&(network.lock));
+			/*  
+			*  all tasks on the writers queue are exclusive tasks. 
+			*  and wake_up() wakes up only one exclusive task.
+			*/
 			wake_up(&(network.writers_queue));
 		}
 		//No need to wake up readers since they can share a lock
@@ -164,6 +172,10 @@ asmlinkage long sys_netlock_release (void)
 		{
 			//TODO not sure where to place this unlock
 			spin_unlock_irq(&(network.lock));
+			/*  
+			*  all tasks on the writers queue are exclusive tasks. 
+			*  and wake_up() wakes up only one exclusive task.
+			*/
 			wake_up(&(network.writers_queue));
 		}
 		// No writers. Wake up readers.
@@ -171,6 +183,10 @@ asmlinkage long sys_netlock_release (void)
 		{
 			//TODO not sure where to place this unlock
 			spin_unlock_irq(&(network.lock));
+			/*
+			*  all tasks on the readers queue are non-exclusive tasks.
+			*  wake_up() wakes up all non-exclusive task.
+			*/
 			wake_up(&(network.readers_queue));
 		}
 		
