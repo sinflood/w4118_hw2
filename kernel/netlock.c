@@ -4,8 +4,8 @@
 #include <linux/errno.h>
 #include <linux/sched.h>
 
-//TODO:need to be initiliazed
-static struct network_struct network;
+//declare and initialize at compile time a network struct
+static NETWORK_STRUCT(network);
 
 asmlinkage long sys_netlock_acquire (netlock_t type)
 {
@@ -15,19 +15,19 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
 	//check that a task doesn't request a second lock
 	if( task->type_lock != NET_LOCK_N )
 	{
-		return EINVAL;
+		return -1;
 	}
 	
 	//check correct netlock_t type request
 	if(  type!=NET_LOCK_E && type!=NET_LOCK_R )
 	{
-		return EINVAL;
+		return -1;
 	}
 	
 	DEFINE_WAIT(writers_wait);
 	DEFINE_WAIT(readers_wait);
 	
-	//TODO not sure if this is the good lock or if spin_lock is enough
+	//TODO not sure if this is the good lock or if spin_lock() is enough
 	spin_lock_irq(&(network.lock);
 		
 	
@@ -38,15 +38,25 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
 		//the writer waits for the while condition to be false
 		network.num_waiting_writers++;	
 		
+		/*
+		* "When a process requests an exclusive lock, it must wait until processes 
+		*  currently holding regular or exclusive locks release the locks"
+		*/
+		
 		while ( network.num_current_writers != 0 || network.num_current_readers != 0)
 		{
 			prepare_to_wait(&(network.writers_queue), &writers_wait, TASK_INTERRUPTIBLE);
 			//unlock before scheduling another task			
 			spin_unlock_irq(&(network.lock));
+			
+			/*
+			* This is in the LDK book. Not sure if it is needed
 			if(signal_pending((task))
 			{
 				//TODO handle signal
 			}
+			*/
+			
 			schedule();
 			//lock before checking the while loop condition
 			spin_lock_irq(&(network.lock));
@@ -70,15 +80,25 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
 		//the reader waits for the while condition to be false
 		network.num_waiting_readers++;	
 		
+		/* 
+		*  "The calls to acquire the lock in regular mode should succeed 
+		*  immediately as long as no process is holding an exclusive (write) lock
+		*  or is waiting for an exclusive lock."
+		*/
 		while ( network.num_current_writers != 0 || network.num_waiting_writers != 0)
 		{
 			prepare_to_wait(&(network.readers_queue), &readers_wait, TASK_INTERRUPTIBLE);
 			//unlock before scheduling another task			
 			spin_unlock_irq(&(network.lock));
+			
+			/*
+			* This is in the LDK book. Not sure if it is needed
 			if(signal_pending((task))
 			{
 				//TODO handle signal
 			}
+			*/
+			
 			schedule();
 			//lock before checking the while loop condition
 			spin_lock_irq(&(network.lock));
@@ -106,7 +126,7 @@ asmlinkage long sys_netlock_release (void)
 	//check if the task owns a lock
 	if ( task->type_lock != NET_LOCK_R && task->type_lock != NET_LOCK_E)
 	{
-		return EINVAL;
+		return -1;
 	}
 	
 	spin_lock_irq(&(network.lock);
