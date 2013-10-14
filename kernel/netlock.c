@@ -24,103 +24,141 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
 		return -1;
 	}
 	
-	DEFINE_WAIT(writers_wait);
-	DEFINE_WAIT(readers_wait);
+ 	/* This is the return value of netlock_acquire. 
+    	0 is success, -1 is error */
+ 	int ret = 0;
+
+ 	// Case: Writer
+ 	if ( type == NET_LOCK_E )
+ 	{
+ 		//define a new wait entry
+ 		DEFINE_WAIT(writers_wait);
 	
-	//TODO not sure if this is the good lock or if spin_lock() is enough
-	spin_lock_irq(&(network.lock);
-		
+ 		spin_lock_irq(&(network.lock);
+ 		network.num_waiting_writers++;
+ 		spin_unlock_irq(&(network.lock));
 	
-	// Case: Writer
-	if ( type == NET_LOCK_E ) 
-	{
-		/*
-		*  add the task to the wait queue with the exclusive flag
-		*/
-		add_wait_queue_exclusive(network.writers_queue,&writers_wait);
-		//the writer waits for the while condition to be false
-		network.num_waiting_writers++;	
-		
-		/*
-		* "When a process requests an exclusive lock, it must wait until processes 
-		*  currently holding regular or exclusive locks release the locks"
-		*/
-		
-		while ( network.num_current_writers != 0 || network.num_current_readers != 0)
-		{
-			prepare_to_wait(&(network.writers_queue), &writers_wait, TASK_INTERRUPTIBLE);
-			//unlock before scheduling another task			
-			spin_unlock_irq(&(network.lock));
-			
-			/*
-			* This is in the LDK book. Not sure if it is needed
-			if(signal_pending((task))
-			{
-				//TODO handle signal
-			}
-			*/
-			
-			schedule();
-			//lock before checking the while loop condition
-			spin_lock_irq(&(network.lock));
-		}
-		
-		finish_wait(&network.writers_queue, &writers_wait);
-		
-		//the writer is now running
-		network.num_waiting_writers--;				
-		network.num_current_writers++;
-		
-		spin_unlock_irq(&(network.lock));
-		
-		//set the task as writer
-		task->type_lock = NET_LOCK_E;
-	}
-	// Case: Reader
-	else
-	{	
-		// add the task to the wait queue with the non-exclusive flag
-		add_wait_queue(network.readers_queue,&readers_wait);
-		//the reader waits for the while condition to be false
-		network.num_waiting_readers++;	
-		
-		/* 
-		*  "The calls to acquire the lock in regular mode should succeed 
-		*  immediately as long as no process is holding an exclusive (write) lock
-		*  or is waiting for an exclusive lock."
-		*/
-		while ( network.num_current_writers != 0 || network.num_waiting_writers != 0)
-		{
-			prepare_to_wait(&(network.readers_queue), &readers_wait, TASK_INTERRUPTIBLE);
-			//unlock before scheduling another task			
-			spin_unlock_irq(&(network.lock));
-			
-			/*
-			* This is in the LDK book. Not sure if it is needed
-			if(signal_pending((task))
-			{
-				//TODO handle signal
-			}
-			*/
-			
-			schedule();
-			//lock before checking the while loop condition
-			spin_lock_irq(&(network.lock));
-		}
-		
-		finish_wait(&network.readers_queue, &readers_wait);
-		
-		//the reader is now running
-		network.num_waiting_readers--;				
-		network.num_current_readers++;
-		
-		spin_unlock_irq(&(network.lock));
-		
-		//set the task as reader
-		task->type_lock = NET_LOCK_R;
-	}
+ 		for(;;) 
+ 		{
+ 			/*
+ 			*  prepare_to_wait_exclusive() does 3 things:
+ 			*  First it sets wait->flags to exclusive (wake_up() wakes up only one exclusive task)
+ 			*  Second it calls __add_wait_queue_tail that insert the new wait entry to the end of the queue
+ 			*  This is necessary because we want to implement a queue : "If multiple processes request 
+ 			*  exclusive locks, they should be granted locks in the order of their request"  
+ 			*  Third it sets the task state to TASK_INTERRUPTIBLE (But the task is not sleeping yet! it will be  
+ 			*  only after schedule() is called)
+ 		    */
+ 			prepare_to_wait_exclusive(&(network.writers_queue), &writers_wait, TASK_INTERRUPTIBLE);
+
+ 			//acquire a lock to check network conditions
+ 			spin_lock_irq(&(network.lock);
+ 			/*
+ 			* "When a process requests an exclusive lock, it must wait until processes 
+ 			*  currently holding regular or exclusive locks release the locks"
+ 			*/
+ 			if(network.num_current_writers == 0 && network.num_current_readers == 0)
+ 			{
+ 				break;
+ 			}
+ 			/*
+ 			*  The network conditions weren't satisfied. We put the task to sleep.
+ 			*  In the absence of signal, we call schedule() to schedule another task.
+ 			*  Before, we release the lock.
+ 			*  When woken up, the task executes the continue statement that takes it back to the beginning
+ 			*  of the for loop. 
+ 			*/
+ 			if(!signal_pending(task))
+ 			{
+ 				spin_unlock_irq(&(network.lock));
+ 				schedule();
+ 				continue;
+ 			}		
+ 			// this code is executed if we get a signal. we return an error and break out of the loop
+ 			ret = -1;
+ 			break;
+ 		}
+ 		//a task exits the for loop holding a network lock
+
+ 		finish_wait(&network.writers_queue, &writers_wait);
+ 		network.num_waiting_writers--;
 	
-	return 0;
+ 		if (ret == 0)
+ 		{
+ 			//the writer is now running
+ 			network.num_current_writers++;
+ 			spin_unlock_irq(&(network.lock));
+ 			//set the task as writer
+ 			task->type_lock = NET_LOCK_E;
+ 		}
+ 		else 
+ 	    {
+ 			//netlock_acquire fails. release the network lock.
+ 			spin_unlock_irq(&(network.lock));
+ 		}
+ 	}
+ 	// Case: Reader
+	 else
+ 	{
+ 		//define a new wait entry
+ 		DEFINE_WAIT(readers_wait);
+	
+ 		spin_lock_irq(&(network.lock);
+ 		network.num_waiting_readers++;
+ 		spin_unlock_irq(&(network.lock));
+	
+ 		for(;;) 
+ 		{
+ 			/*
+ 			*  For readers, we don't need prepare_to_wait_exclusive.
+ 			*  All waiting readers are woken up together. So no need to implement a queue: __add_wait_queue()
+ 			*  is enough and tasks don't need to be flagged as EXCLUSIVE.
+ 			*/
+ 			prepare_to_wait(&(network.readers_queue), &readers_wait, TASK_INTERRUPTIBLE);
+		
+ 			//acquire a lock to check network conditions
+ 			spin_lock_irq(&(network.lock);
+ 			/* 
+ 			*  "The calls to acquire the lock in regular mode should succeed 
+ 			*  immediately as long as no process is holding an exclusive (write) lock
+ 			*  or is waiting for an exclusive lock."
+ 			*/
+ 			if(network.num_current_writers == 0 && network.num_waiting_writers == 0)
+ 			{
+ 				break;
+ 			}
+ 			if(!signal_pending(task))
+ 			{
+ 				spin_unlock_irq(&(network.lock));
+ 				schedule();
+ 				continue;
+ 			}		
+ 			// this code is executed if we get a signal. we return an error and break out of the loop
+ 			ret = -1;
+ 			break;
+ 		}
+ 		//a task exits the for loop holding a network lock
+
+ 		finish_wait(&network.readers_queue, &readers_wait);
+ 		network.num_waiting_readers--;
+	
+ 		if (ret == 0)
+ 		{
+ 			//the writer is now running
+ 			network.num_current_readers++;
+ 			spin_unlock_irq(&(network.lock));
+ 			//set the task as writer
+ 			task->type_lock = NET_LOCK_R;
+ 		}
+ 		else 
+ 		{
+ 			//netlock_acquire fails. release the network lock.
+ 			spin_unlock_irq(&(network.lock));
+ 		}
+	
+ 	}
+	
+	return ret;
 }
 
 asmlinkage long sys_netlock_release (void)
@@ -147,11 +185,11 @@ asmlinkage long sys_netlock_release (void)
 		//if no other current readers but waiting writers, wake up the writers
 		if ( network.num_current_readers == 0 && network.num_waiting_writers != 0 )
 		{
-			//TODO not sure where to place this unlock
 			spin_unlock_irq(&(network.lock));
 			/*  
 			*  all tasks on the writers queue are exclusive tasks. 
 			*  and wake_up() wakes up only one exclusive task.
+			*  prepare_to_wait_exclusive() and wake_up () used together implement a FIFO
 			*/
 			wake_up(&(network.writers_queue));
 		}
@@ -159,7 +197,7 @@ asmlinkage long sys_netlock_release (void)
 		
 	}
 	/* Case: Writer
-	* "Only one precess may hold an exclusive lock at any given time".
+	* "Only one process may hold an exclusive lock at any given time".
 	*  Therefore if the unlocking process is a writer, it was the only
 	*  process having a lock. We may then immediately wake up writers. 
 	*/
@@ -170,7 +208,6 @@ asmlinkage long sys_netlock_release (void)
 		//Try to wake up writers
 		if (network.num_waiting_writers != 0 )
 		{
-			//TODO not sure where to place this unlock
 			spin_unlock_irq(&(network.lock));
 			/*  
 			*  all tasks on the writers queue are exclusive tasks. 
@@ -181,7 +218,6 @@ asmlinkage long sys_netlock_release (void)
 		// No writers. Wake up readers.
 		else if (network.num_waiting_readers != 0)
 		{
-			//TODO not sure where to place this unlock
 			spin_unlock_irq(&(network.lock));
 			/*
 			*  all tasks on the readers queue are non-exclusive tasks.
