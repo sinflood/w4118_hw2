@@ -75,7 +75,7 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
  				continue;
  			}		
  			// this code is executed if we get a signal. we return an error and break out of the loop
- 			ret = -1;
+ 			ret = -ERESTARTSYS;
  			break;
  		}
  		//a task exits the for loop holding a network lock
@@ -134,7 +134,7 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
  				continue;
  			}		
  			// this code is executed if we get a signal. we return an error and break out of the loop
- 			ret = -1;
+ 			ret = -ERESTARTSYS;
  			break;
  		}
  		//a task exits the for loop holding a network lock
