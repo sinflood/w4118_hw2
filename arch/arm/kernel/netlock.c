@@ -3,14 +3,21 @@
 #include <asm/current.h>
 #include <linux/errno.h>
 #include <linux/sched.h>
+#include <linux/spinlock.h>
+#include <linux/wait.h>
+//declare and initialize at compile time a network struct 
 
-//declare and initialize at compile time a network struct
-static NETWORK_STRUCT(network);
+
+//TODO uncoment to the line below.
+//static NETWORK_STRUCT(network);
+
+static struct network_struct network;
 
 asmlinkage long sys_netlock_acquire (netlock_t type)
 {
 	
 	struct task_struct *task = get_current();
+ 	int ret = 0;
 	
 	//check that a task doesn't request a second lock
 	if( task->type_lock != NET_LOCK_N )
@@ -26,7 +33,6 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
 	
  	/* This is the return value of netlock_acquire. 
     	0 is success, -1 is error */
- 	int ret = 0;
 
  	// Case: Writer
  	if ( type == NET_LOCK_E )
@@ -34,7 +40,7 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
  		//define a new wait entry
  		DEFINE_WAIT(writers_wait);
 	
- 		spin_lock_irq(&(network.lock);
+ 		spin_lock_irq(&(network.lock));
  		network.num_waiting_writers++;
  		spin_unlock_irq(&(network.lock));
 	
@@ -52,7 +58,7 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
  			prepare_to_wait_exclusive(&(network.writers_queue), &writers_wait, TASK_INTERRUPTIBLE);
 
  			//acquire a lock to check network conditions
- 			spin_lock_irq(&(network.lock);
+ 			spin_lock_irq(&(network.lock));
  			/*
  			* "When a process requests an exclusive lock, it must wait until processes 
  			*  currently holding regular or exclusive locks release the locks"
@@ -97,13 +103,14 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
  			spin_unlock_irq(&(network.lock));
  		}
  	}
+	
  	// Case: Reader
 	 else
  	{
  		//define a new wait entry
  		DEFINE_WAIT(readers_wait);
 	
- 		spin_lock_irq(&(network.lock);
+ 		spin_lock_irq(&(network.lock));
  		network.num_waiting_readers++;
  		spin_unlock_irq(&(network.lock));
 	
@@ -117,7 +124,7 @@ asmlinkage long sys_netlock_acquire (netlock_t type)
  			prepare_to_wait(&(network.readers_queue), &readers_wait, TASK_INTERRUPTIBLE);
 		
  			//acquire a lock to check network conditions
- 			spin_lock_irq(&(network.lock);
+ 			spin_lock_irq(&(network.lock));
  			/* 
  			*  "The calls to acquire the lock in regular mode should succeed 
  			*  immediately as long as no process is holding an exclusive (write) lock
@@ -171,7 +178,7 @@ asmlinkage long sys_netlock_release (void)
 		return -1;
 	}
 	
-	spin_lock_irq(&(network.lock);
+	spin_lock_irq(&(network.lock));
 	
 	/* Case: Reader
 	*  We prioritize writers over readers. Since many readers can 
