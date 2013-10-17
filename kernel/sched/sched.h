@@ -78,6 +78,7 @@ extern struct mutex sched_domains_mutex;
 #include <linux/cgroup.h>
 
 struct cfs_rq;
+struct mycfs_rq;
 struct rt_rq;
 
 static LIST_HEAD(task_groups);
@@ -111,6 +112,7 @@ struct task_group {
 	struct sched_entity **se;
 	/* runqueue "owned" by this group on each cpu */
 	struct cfs_rq **cfs_rq;
+	struct mycfs_rq **mycfs_rq;
 	unsigned long shares;
 
 	atomic_t load_weight;
@@ -371,6 +373,7 @@ struct rq {
 	u64 nr_switches;
 
 	struct cfs_rq cfs;
+	struct mycfs_rq mycfs;
 	struct rt_rq rt;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -856,6 +859,7 @@ enum cpuacct_stat_index {
 extern const struct sched_class stop_sched_class;
 extern const struct sched_class rt_sched_class;
 extern const struct sched_class fair_sched_class;
+extern const struct sched_class mycfs_sched_class;
 extern const struct sched_class idle_sched_class;
 
 
