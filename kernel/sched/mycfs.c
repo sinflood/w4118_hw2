@@ -42,7 +42,7 @@ This function chooses the most appropriate task eligible to run next.
 static struct task_struct *pick_next_task_mycfs(struct rq *rq)
 {
 
-
+	return NULL;
 }
 
 /*
@@ -66,6 +66,15 @@ static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
 
 }
 
+
+/*
+ * Preempt the current task with a newly woken task if needed:
+ */
+static void check_preempt_mycfs(struct rq *rq, struct task_struct *p, int wake_flags)
+{
+
+
+}
 /*
  * the scheduling class methods:
  */
@@ -75,7 +84,7 @@ const struct sched_class mycfs_sched_class = {
 	.dequeue_task		= dequeue_task_mycfs,
 	.yield_task		= yield_task_mycfs,
 
-	.check_preempt_curr	= check_preempt_wakeup,
+	.check_preempt_curr	= check_preempt_mycfs,
 
 	.pick_next_task		= pick_next_task_mycfs,
 
