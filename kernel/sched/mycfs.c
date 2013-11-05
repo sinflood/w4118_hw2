@@ -96,18 +96,18 @@ static void insert_tree(struct mycfs_rq *mycfs_rq, struct sched_entity *se){
 /*
 *  Enqueue an entity into the rb-tree
 */
-static void enqueue_entity(struct mycfs_rq *mycfs_rq, struct sched_entity *se, int flags)
+static void enqueue_entity(struct mycfs_rq *mycfs_rq, struct sched_entity *se)
 {
-	if(!(flags & ENQUEUE_WAKEUP) /*|| (flags & ENQUEUE_MIGRATE)*/)
-	    se->vruntime += mycfs_rq->min_vruntime;
+	//if(!(flags & ENQUEUE_WAKEUP) /*|| (flags & ENQUEUE_MIGRATE)*/)
+	//    se->vruntime += mycfs_rq->min_vruntime;
         
         update_curr(mycfs_rq);
         //update_min_vruntime(mycfs_rq);
-        if(flags & ENQUEUE_WAKEUP)
+        /*if(flags & ENQUEUE_WAKEUP)
 	{
 	    se->vruntime = max_vruntime(se->vruntime, mycfs_rq->min_vruntime);
 
-	}
+	}*/
 	
 	insert_tree(mycfs_rq, se);
 
@@ -136,10 +136,10 @@ enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 	*/
 
 
-        mycfs_rq->h_nr_running++; //update the number of proccesses running.  
+        mycfs_rq->nr_running++; //update the number of proccesses running.  
 	inc_nr_running(rq);
 
-	enqueue_entity(mycfs_rq, se, flags);
+	enqueue_entity(mycfs_rq, se);
 	se->on_rq = 1;
 }
 
@@ -175,11 +175,11 @@ static void dequeue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 	/* Do we need the flags? */
 	struct sched_entity *se= &p->se;
 	struct mycfs_rq *mycfs_rq = &rq->mycfs;
-	mycfs_rq->h_nr_running--;
+	mycfs_rq->nr_running--;
 
 	se->on_rq = 0;
 	dequeue_entity(mycfs_rq, se);
-	mycfs_rq->h_nr_running--;
+	mycfs_rq->nr_running--;
 	dec_nr_running(rq);
 }
 
@@ -202,7 +202,7 @@ static void yield_task_mycfs(struct rq *rq)
   
   rq->skip_clock_update = 1;
   dequeue_entity(mycfs_rq, se);
-  enqueue_entity(mycfs_rq, se, 0);
+  enqueue_entity(mycfs_rq, se);
   //I believe this should work and schedule() call in sched_yeild() shoudl handle the rest.
   
 }
@@ -259,17 +259,6 @@ static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
 
 }
 
-
-/*
- * Preempt the current task with a newly woken task if needed:
- */
-static void check_preempt_mycfs(struct rq *rq, struct task_struct *p, int wake_flags)
-{
-
-
-}
-
-
 /////////////////////////////////////////////////////////////////////////////
 //                    *PART B CODE BELOW*                                  //
 /////////////////////////////////////////////////////////////////////////////
@@ -308,7 +297,7 @@ void wake_limited(struct mycfs_rq *mycfs_rq, struct rq *rq)
         mycfs_rq->wait_head = NULL;
     }    
 }
-/*  
+*  
  * we keep track of interval_data on every tick.  If a mycfs_rq task is not the current
  * then we still call this function with curr equal to NULL.  In that case just update the info
  * and maybe move all of the items off of the waiting list and reset each entities data.
@@ -379,7 +368,7 @@ void update_interval_data(struct mycfs_rq *mycfs_rq, struct rq *rq, struct task_
 void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
 {
   /* I think we need to only initialize these two fields */
-  mycfs_rq->tasks_timeline = RB_BOOT;
+  mycfs_rq->tasks_timeline = RB_ROOT;
   mycfs_rq->min_vruntime = 0;
 }
 
@@ -402,6 +391,66 @@ static unsigned int get_rr_interval_mycfs(struct rq *rq, struct task_struct *tas
   return NS_TO_JIFFIES(timeslice);
 }
 
+static void put_prev_entity(struct mycfs_rq *mycfs_rq, struct sched_entity *prev)
+{
+        /*
+         * If still on the runqueue then deactivate_task()
+         * was not called and update_curr() has to be done:
+         */
+        if (prev->on_rq)
+                update_curr(mycfs_rq);
+
+        /* throttle cfs_rqs exceeding runtime TODO Is this needed?*/
+        //check_cfs_rq_runtime(mycfs_rq);
+
+        if (prev->on_rq) {
+                //update_stats_wait_start(mycfs_rq, prev);
+                /* Put 'current' back into the tree. */
+                enqueue_entity(mycfs_rq, prev);
+        }
+        mycfs_rq->curr = NULL;
+}
+
+/*
+ * Account for a descheduled task:
+ */
+static void put_prev_task_mycfs(struct rq *rq, struct task_struct *prev)
+{
+        struct sched_entity *se = &prev->se;
+        struct mycfs_rq *mycfs_rq = &rq->mycfs;
+
+
+        put_prev_entity(mycfs_rq, se);
+        
+}
+/*
+ * Preempt the current task with a newly woken task if needed:
+ */
+static void check_preempt_mycfs(struct rq *rq, struct task_struct *p, int wake_flags)
+{
+        //struct task_struct *curr = rq->curr;
+        //struct sched_entity *se = &curr->se, *pse = &p->se;
+        //struct mycfs_rq *cfs_rq = &rq->mycfs;
+	//TODO finish
+}
+
+/*
+ * sched_balance_self: balance the current task (running on cpu) in domains
+ * that have the 'flag' flag set. In practice, this is SD_BALANCE_FORK and
+ * SD_BALANCE_EXEC.
+ *
+ * Balance, ie. select the least loaded group.
+ *
+ * Returns the target CPU number, or the same CPU if no balancing is needed.
+ *
+ * preempt must be disabled.
+ */
+static int
+select_task_rq_mycfs(struct task_struct *p, int sd_flag, int wake_flags)
+{
+
+	return -1;
+}
 /*
  * the scheduling class methods:
  */
@@ -416,9 +465,9 @@ const struct sched_class mycfs_sched_class = {
 	.check_preempt_curr	= check_preempt_mycfs,
 
 	.pick_next_task		= pick_next_task_mycfs,
-    	//.put_prev_task      = put_prev_task_mycfs,
+    	.put_prev_task      = put_prev_task_mycfs,
 	
-	//.select_task_rq     = select_task_rq_mycfs,
+	.select_task_rq     = select_task_rq_mycfs,
 	//.task_waking        = task_waking_mycfs,
 
 	.set_curr_task      = set_curr_task_mycfs,
