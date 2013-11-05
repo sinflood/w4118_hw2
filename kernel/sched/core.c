@@ -1722,7 +1722,7 @@ int wake_up_state(struct task_struct *p, unsigned int state)
 static void __sched_fork(struct task_struct *p)
 {
 	
-	p->wait_next = NULL;
+	p->next_wait = NULL;
 	p->intervalTime = 0;
 	p->on_rq			= 0;
 
@@ -3048,7 +3048,7 @@ void scheduler_tick(void)
 	update_cpu_load_active(rq);
 	
 	/*this is for partB, it calls mycfs taks_tick no matter what process is running.*/ 
-        if(curr->sched_class != &my_cfs_sched_class) mycfs_sched_class.task_tick(rq, NULL, 0); 
+        if(curr->sched_class != &mycfs_sched_class) mycfs_sched_class.task_tick(rq, NULL, 0); 
         
 	curr->sched_class->task_tick(rq, curr, 0);
 	raw_spin_unlock(&rq->lock);

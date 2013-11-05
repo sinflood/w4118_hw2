@@ -426,28 +426,173 @@ static void put_prev_task_mycfs(struct rq *rq, struct task_struct *prev)
         put_prev_entity(mycfs_rq, se);
         
 }
+
+static inline struct sched_entity *parent_entity(struct sched_entity *se)
+{
+        return se->parent;
+}
+#if BITS_PER_LONG == 32
+# define WMULT_CONST        (~0UL)
+#else
+# define WMULT_CONST        (1UL << 32)
+#endif
+
+#define WMULT_SHIFT        32
+/*
+ * Shift right and round:
+ */
+#define SRR(x, y) (((x) + (1UL << ((y) - 1))) >> (y))
+/*
+ * delta *= weight / lw
+ */
+static unsigned long
+calc_delta_mine(unsigned long delta_exec, unsigned long weight,
+                struct load_weight *lw)
+{
+        u64 tmp;
+
+        /*
+         * weight can be less than 2^SCHED_LOAD_RESOLUTION for task group sched
+         * entities since MIN_SHARES = 2. Treat weight as 1 if less than
+         * 2^SCHED_LOAD_RESOLUTION.
+         */
+        if (likely(weight > (1UL << SCHED_LOAD_RESOLUTION)))
+                tmp = (u64)delta_exec * scale_load_down(weight);
+        else
+                tmp = (u64)delta_exec;
+
+        if (!lw->inv_weight) {
+                unsigned long w = scale_load_down(lw->weight);
+
+                if (BITS_PER_LONG > 32 && unlikely(w >= WMULT_CONST))
+                        lw->inv_weight = 1;
+                else if (unlikely(!w))
+                        lw->inv_weight = WMULT_CONST;
+                else
+                        lw->inv_weight = WMULT_CONST / w;
+        }
+
+        /*
+         * Check whether we'd overflow the 64-bit multiplication:
+         */
+        if (unlikely(tmp > WMULT_CONST))
+                tmp = SRR(SRR(tmp, WMULT_SHIFT/2) * lw->inv_weight,
+                        WMULT_SHIFT/2);
+        else
+                tmp = SRR(tmp * lw->inv_weight, WMULT_SHIFT);
+
+        return (unsigned long)min(tmp, (u64)(unsigned long)LONG_MAX);
+}
+/*
+ * delta /= w
+ */
+static inline unsigned long
+calc_delta_fair(unsigned long delta, struct sched_entity *se)
+{
+        if (unlikely(se->load.weight != NICE_0_LOAD))
+                delta = calc_delta_mine(delta, NICE_0_LOAD, &se->load);
+
+        return delta;
+}
+static unsigned long
+wakeup_gran(struct sched_entity *curr, struct sched_entity *se)
+{
+        unsigned long gran = sysctl_sched_wakeup_granularity;
+
+        /*
+         * Since its curr running now, convert the gran from real-time
+         * to virtual-time in his units.
+         *
+         * By using 'se' instead of 'curr' we penalize light tasks, so
+         * they get preempted easier. That is, if 'se' < 'curr' then
+         * the resulting gran will be larger, therefore penalizing the
+         * lighter, if otoh 'se' > 'curr' then the resulting gran will
+         * be smaller, again penalizing the lighter task.
+         *
+         * This is especially important for buddies when the leftmost
+         * task is higher priority than the buddy.
+         */
+        return calc_delta_fair(gran, se);
+}
+static int
+wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se)
+{
+        s64 gran, vdiff = curr->vruntime - se->vruntime;
+
+        if (vdiff <= 0)
+                return -1;
+
+        gran = wakeup_gran(curr, se);
+        if (vdiff > gran)
+                return 1;
+
+        return 0;
+}
+
 /*
  * Preempt the current task with a newly woken task if needed:
  */
 static void check_preempt_mycfs(struct rq *rq, struct task_struct *p, int wake_flags)
 {
-        //struct task_struct *curr = rq->curr;
-        //struct sched_entity *se = &curr->se, *pse = &p->se;
-        //struct mycfs_rq *cfs_rq = &rq->mycfs;
-	//TODO finish
+        struct task_struct *curr = rq->curr;
+        struct sched_entity *se = &curr->se, *pse = &p->se;
+        //struct mycfs_rq *cfs_rq = se->mycfs_rq;
+        //int scale = cfs_rq->nr_running >= sched_nr_latency;
+
+        if (unlikely(se == pse))
+                return;
+
+        /*
+         * We can come here with TIF_NEED_RESCHED already set from new task
+         * wake up path.
+         *
+         * Note: this also catches the edge-case of curr being in a throttled
+         * group (e.g. via set_curr_task), since update_curr() (in the
+         * enqueue of curr) will have resulted in resched being set.  This
+         * prevents us from potentially nominating it as a false LAST_BUDDY
+         * below.
+         */
+        if (test_tsk_need_resched(curr))
+                return;
+
+        /* Idle tasks are by definition preempted by non-idle tasks. */
+        if (unlikely(curr->policy == SCHED_IDLE) &&
+            likely(p->policy != SCHED_IDLE))
+                goto preempt;
+
+        /*
+         * Batch and idle tasks do not preempt non-idle tasks (their preemption
+         * is driven by the tick):
+         */
+        if (unlikely(p->policy != SCHED_NORMAL))
+                return;
+
+        //find_matching_se(&se, &pse);
+        update_curr(se->mycfs_rq);
+        BUG_ON(!pse);
+        if (wakeup_preempt_entity(se, pse) == 1) {
+
+
+                goto preempt;
+        }
+
+        return;
+
+preempt:
+        resched_task(curr);
+        /*
+         * Only set the backward buddy when the current task is still
+         * on the rq. This can happen when a wakeup gets interleaved
+         * with schedule on the ->pre_schedule() or idle_balance()
+         * point, either of which can * drop the rq lock.
+         *
+         * Also, during early boot the idle thread is in the fair class,
+         * for obvious reasons its a bad idea to schedule back to it.
+         */
+        if (unlikely(!se->on_rq || curr == rq->idle))
+                return;
 }
 
-/*
- * sched_balance_self: balance the current task (running on cpu) in domains
- * that have the 'flag' flag set. In practice, this is SD_BALANCE_FORK and
- * SD_BALANCE_EXEC.
- *
- * Balance, ie. select the least loaded group.
- *
- * Returns the target CPU number, or the same CPU if no balancing is needed.
- *
- * preempt must be disabled.
- */
 static int
 select_task_rq_mycfs(struct task_struct *p, int sd_flag, int wake_flags)
 {
