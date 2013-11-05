@@ -376,7 +376,12 @@ void update_interval_data(struct mycfs_rq *mycfs_rq, struct rq *rq, struct task_
 */
 
 
-
+void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
+{
+  /* I think we need to only initialize these two fields */
+  mycfs_rq->tasks_timeline = RB_BOOT;
+  mycfs_rq->min_vruntime = 0;
+}
 
 /*
  * the scheduling class methods:
