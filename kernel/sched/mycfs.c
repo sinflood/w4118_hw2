@@ -384,6 +384,25 @@ void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
 }
 
 /*
+ *  called by SYSCALL_DEFINE2(sched_rr_get_interval) in core.c
+ *  this syscall writes the default timeslice of a given process into
+ *  the user-space timespec buffer
+ *
+ *  The timeslice is the latency divided by the number of processes on mycfs_rq
+ *
+ */
+
+static unsigned int get_rr_interval_mycfs(struct rq *rq, struct task_struct *task)
+{
+  struct mycfs_rq *mycfs_rq = &rq->mycfs;
+  unsigned int num_processes = mycfs_rq->nr_running;
+  /* latency = 10msec = 10,000,000 nanosec */
+  unsigned int latency = 10000000;
+  unsigned int timeslice = latency/num_processes;
+  return NS_TO_JIFFIES(timeslice);
+}
+
+/*
  * the scheduling class methods:
  */
 const struct sched_class mycfs_sched_class = {
@@ -410,5 +429,5 @@ const struct sched_class mycfs_sched_class = {
 	//.switched_from      = switched_from_mycfs,
 	//.switched_to        = switched_to_mycfs,
 
-	//.get_rr_interval    = get_rr_interval_mycfs,
+        .get_rr_interval    = get_rr_interval_mycfs,
 };
