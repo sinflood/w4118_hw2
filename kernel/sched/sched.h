@@ -1,4 +1,3 @@
-
 #include <linux/sched.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
@@ -287,6 +286,12 @@ struct mycfs_rq {
 
         struct sched_entity *curr;
 	struct rq *rq;	/* cpu runqueue to which this cfs_rq is attached */
+	
+	/*stuff for partB */
+	struct task_struct *wait_head;
+	u64 intervalNum;
+	u64 intervalTime;
+	
 };//END MYCFS
 
 static inline int rt_bandwidth_enabled(void)
