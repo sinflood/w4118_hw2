@@ -449,7 +449,7 @@ static int
 select_task_rq_mycfs(struct task_struct *p, int sd_flag, int wake_flags)
 {
 
-	return -1;
+	 return task_cpu(p);
 }
 /*
  * the scheduling class methods:
