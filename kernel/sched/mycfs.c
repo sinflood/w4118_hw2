@@ -216,7 +216,7 @@ static void dequeue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 	/* Do we need the flags? */
 	struct sched_entity *se= &p->se;
 	struct mycfs_rq *mycfs_rq = &rq->mycfs;
-	mycfs_rq->nr_running--;
+	//mycfs_rq->nr_running--;
 
 	se->on_rq = 0;
 	dequeue_entity(mycfs_rq, se);
@@ -319,6 +319,8 @@ void add_to_wait(struct mycfs_rq *mycfs_rq, struct task_struct *curr)
       mycfs_rq->wait_head = curr;
     //NOTE that curr's sched_entity should not be on the rb tree.
     }
+    mycfs_rq->nr_running--;
+    dec_nr_running(mycfs_rq->rq);
     //curr->running = 0;
 }
 
@@ -329,7 +331,7 @@ void wake_limited(struct mycfs_rq *mycfs_rq, struct rq *rq)
     if(p)
     {
         struct task_struct *next;
-        do
+        while(p);
         {
             next = p->next_wait;
             enqueue_task_mycfs(rq, p, 0);
@@ -337,7 +339,8 @@ void wake_limited(struct mycfs_rq *mycfs_rq, struct rq *rq)
             p->intervalTime = 0;
             p->intervalNum = mycfs_rq->intervalNum;
             p = next;
-        }while(p);
+            
+        }
         
         mycfs_rq->wait_head = NULL;
     }
