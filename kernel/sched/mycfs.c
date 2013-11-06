@@ -26,8 +26,8 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
 {
   struct sched_entity *curr = mycfs_rq->curr;
   u64 now = mycfs_rq->rq->clock;
-  unsigned long delta_exec;
-  if(mycfs_rq->lastTickTime == 0) mycfs_rq=>lastTickTime = now;//could cause a bug if 0 happens to be the last tick time. but that is unlikely.
+  //unsigned long delta_exec;
+  if(mycfs_rq->lastTickTime == 0) mycfs_rq->lastTickTime = now;//could cause a bug if 0 happens to be the last tick time. but that is unlikely.
   //not sure if necessary if we can't initialize intervalTime
     //even if you can't initialize clock then it would just make the first interval shorter or one tick.
    // if(mycfs_rq->intervalTime == 0)
@@ -36,7 +36,7 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
     //if a task is running from mycfs_rq then update the tasks interval runtime.
     if(curr)
     {
-        if(curr->intrervalNum != mycfs_rq->intervalNum)
+        if(curr->intervalNum != mycfs_rq->intervalNum)
         {
             curr->intervalNum = mycfs_rq->intervalNum;
             curr->intervalTime = 0;
@@ -56,18 +56,18 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
         curr->vruntime += now - mycfs_rq->lastTickTime;
         //curr->lastTime = rq->clock;
     }
-    if(rq->clock - mycfs_rq->intervalTime >100000)
+    if(mycfs_rq->intervalTime >100000)
     {
         mycfs_rq->intervalNum++;
-        wake_limited(mycfs_rq, rq);
-        mycfs->intervalTime = rq->clock;
+        wake_limited(mycfs_rq, mycfs_rq->rq);
+        mycfs_rq->intervalTime = 0;
         if(curr){
             curr->intervalTime = 0;
-            curr->intervalNum = mycfs->intervalNum;
+            curr->intervalNum = mycfs_rq->intervalNum;
         }
     //Remember to update this numbers as we select a new entity to run.
     }
-    mycfs_rq->lastTickTime = rq->clock;
+    mycfs_rq->lastTickTime = now;
 
 
   //if(!delta_exec) return;
@@ -233,7 +233,7 @@ static void yield_task_mycfs(struct rq *rq)
 {
   struct task_struct *curr = rq->curr;
   struct mycfs_rq *mycfs_rq = &rq->mycfs;
-  struct sched_entity *se = &curr->se;
+  //struct sched_entity *se = &curr->se;
 
   if(unlikely(rq->nr_running==1)) return; //no other processes to yeild to.
 
@@ -301,7 +301,7 @@ static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
   
   //if there is more than one task and the timeslice is up reschedule.
   //also if the queued we just reschedule because that's what fair says you do.
-  if((rq->clock - curr->start_exec > 10000/mycfs_rq->nrunning && mycfs_rq->nrunning > 1) || queued)
+  if((rq->clock - curr->se.exec_start > 10000/mycfs_rq->nr_running && mycfs_rq->nr_running > 1) || queued)
       resched_task(rq->curr);
 
 }
@@ -312,7 +312,7 @@ static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
 
 void add_to_wait(struct mycfs_rq *mycfs_rq, struct task_struct *curr)
 {
-    if(!mycfs_rq->wait_head)) mycfs_wait_head = curr;
+    if(!mycfs_rq->wait_head) mycfs_rq->wait_head = curr;
     else
     {
       curr->next_wait = mycfs_rq->wait_head;
@@ -336,8 +336,8 @@ void wake_limited(struct mycfs_rq *mycfs_rq, struct rq *rq)
             next = p->next_wait;
             enqueue_task_mycfs(rq, p, 0);
             p->next_wait = NULL;
-            p->intervalTime = 0;
-            p->intervalNum = mycfs_rq->intervalNum;
+            p->se.intervalTime = 0;
+            p->se.intervalNum = mycfs_rq->intervalNum;
             p = next;
             
         }
@@ -356,15 +356,16 @@ void update_interval_data(struct mycfs_rq *mycfs_rq, struct rq *rq, struct task_
     //remember to add intervalTime and intervalNum to the mycfs_rq.
     //static task_struct *wait_head = NULL add to mycfs
     //check to see if the current procces is done.
-    if(curr && (curr->intervalTime > curr->intervalLimit) && (curr->intervalLimit > 0))
+    if(curr && (curr->se.intervalTime > curr->se.intervalLimit) && (curr->se.intervalLimit > 0))
     {
         //Pick the next task to run, and set it as curr.
-        add_to_wait(mycfs, curr, &wait_head);
+        add_to_wait(mycfs_rq, curr);
         mycfs_rq->curr = NULL;
-        pick_next_task(rq);//not sure if this will work but what I think happens here
+        mycfs_rq->rq->curr = pick_next_task_mycfs(rq);//not sure if this will work but what I think happens here
                            //is that core.c takes over and picks the next task.
                            //this may happen to be in mycfs_rq which should be ok even tho
                            //we are setting the current in mycfs_rq to NULL
+        resched_task(mycfs_rq->rq->curr);
     }
     
 }
