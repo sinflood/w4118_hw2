@@ -1271,6 +1271,7 @@ struct task_struct {
 	struct task_struct *next_wait;
 	u64 intervalNum;//stores which interval this processes is on.
 	u64 intervalTime; //stores time in the current interval this processes has run.
+	u64 intervalLimit;
 	
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
 	void *stack;
