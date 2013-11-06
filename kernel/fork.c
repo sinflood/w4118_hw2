@@ -1464,6 +1464,9 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		attach_pid(p, PIDTYPE_PID, pid);
 		nr_threads++;
 	}
+        //PART B 
+        p->intervalTime = 0;
+        p->intervalLimit = 0;
 
 	total_forks++;
 	spin_unlock(&current->sighand->siglock);
@@ -1474,7 +1477,12 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		threadgroup_change_end(current);
 	perf_event_fork(p);
 
+       
+
+
 	trace_task_newtask(p, clone_flags);
+	
+	
 
 	return p;
 
