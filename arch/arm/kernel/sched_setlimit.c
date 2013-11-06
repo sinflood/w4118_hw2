@@ -17,8 +17,9 @@
 
 asmlinkage int sched_setlimit(pid_t pid, int limit)
 {
-    struct task_struct *p = find_taks_by_vpid(pid);
+    struct task_struct *p = find_task_by_vpid(pid);
     
-    p->intervalLimit = limit*1000; //adjust into nanoseconds
+    p->se.intervalLimit = limit*1000; //adjust into nanoseconds
 
+    return 0;
 }
