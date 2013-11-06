@@ -370,6 +370,9 @@ void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
   /* I think we need to only initialize these two fields */
   mycfs_rq->tasks_timeline = RB_ROOT;
   mycfs_rq->min_vruntime = 0;
+  /*part b stuff. */
+  mycfs_rq->intervalTime = 0;
+  mycfs_rq-> wait_head = NULL;
 }
 
 /*
