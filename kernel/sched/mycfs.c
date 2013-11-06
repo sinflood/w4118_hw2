@@ -608,6 +608,11 @@ select_task_rq_mycfs(struct task_struct *p, int sd_flag, int wake_flags)
 
 	 return task_cpu(p);
 }
+
+static void switched_to_mycfs(struct rq *rq, struct task_struct *p)
+{
+	enqueue_task(rq, p, 0;)
+}
 /*
  * the scheduling class methods:
  */
@@ -633,7 +638,7 @@ const struct sched_class mycfs_sched_class = {
 
 	//.prio_changed       = prio_changed_mycfs,
 	//.switched_from      = switched_from_mycfs,
-	//.switched_to        = switched_to_mycfs,
+	.switched_to        = switched_to_mycfs,
 
         .get_rr_interval    = get_rr_interval_mycfs,
 };
