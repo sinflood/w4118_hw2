@@ -2,6 +2,7 @@
 #include <linux/sched.h>
 #include "sched.h"
 
+void wake_limited(struct mycfs_rq *mycfs_rq, struct rq *rq);
 
 static inline u64 max_vruntime(u64 min_vruntime, u64 vruntime)
 {
@@ -26,14 +27,51 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
   struct sched_entity *curr = mycfs_rq->curr;
   u64 now = mycfs_rq->rq->clock;
   unsigned long delta_exec;
-  if(unlikely(!curr)) return;
+  //not sure if necessary if we can't initialize intervalTime
+    //even if you can't initialize clock then it would just make the first interval shorter or one tick.
+   // if(mycfs_rq->intervalTime == 0)
+       // mycfs_rq->intervalTime = rq->clock;
 
-  delta_exec = (unsigned long)(now - curr->exec_start);
+    //if a task is running from mycfs_rq then update the tasks interval runtime.
+    if(curr)
+    {
+        if(curr->intrervalNum != mycfs_rq->intervalNum)
+        {
+            curr->intervalNum = mycfs_rq->intervalNum;
+            curr->intervalTime = 0;
+        }
+        //running keeps track of if this process was running the previous tick or not.
+        //if it was then we know lastTime is accurate but if not lastTime is junk.
+        //this misses a tick of time
+        /*if(!curr->running)
+        {
+            curr->lastTime = rq->clock;
+            curr->running = 1;//remember to set this when stop running a task.
+        }*/
+        //somehow we have to update the interval time.
+        
+        
+        curr->intervalTime += now - mycfs_rq->lastTickTime;
+        curr->vruntime += now - mycfs_rq->lastTickTime;
+        //curr->lastTime = rq->clock;
+    }
+    if(rq->clock - mycfs_rq->intervalTime >100000)
+    {
+        mycfs_rq->intervalNum++;
+        wake_limited(mycfs_rq, rq);
+        mycfs->intervalTime = rq->clock;
+        if(curr){
+            curr->intervalTime = 0;
+            curr->intervalNum = mycfs->intervalNum;
+        }
+    //Remember to update this numbers as we select a new entity to run.
+    }
+    mycfs_rq->lastTickTime = rq->clock;
 
 
-  if(!delta_exec) return;
+  //if(!delta_exec) return;
 
-  curr->vruntime += delta_exec; //we don't have to worry about weighting the runtimes.
+  //curr->vruntime += delta_exec; //we don't have to worry about weighting the runtimes.
 
   //not sure if we need anything else from the update curr from fair.c.
 
@@ -263,25 +301,22 @@ static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
 //                    *PART B CODE BELOW*                                  //
 /////////////////////////////////////////////////////////////////////////////
 
-//remeber to add a struct task_struct *next_wait to task_struct.
-/*
 void add_to_wait(struct mycfs_rq *mycfs_rq, struct task_struct *curr)
 {
-    if(!mycfs_rq->wait_head)) *wait_head = curr;
+    if(!mycfs_rq->wait_head)) mycfs_wait_head = curr;
     else
     {
-        curr->next_wait = mycfs_rq->wait_head;
-        mycfs_rq->wait_head = curr;
-        //NOTE that curr's sched_entity should not be on the rb tree.
+      curr->next_wait = mycfs_rq->wait_head;
+      mycfs_rq->wait_head = curr;
+    //NOTE that curr's sched_entity should not be on the rb tree.
     }
-    curr->running = 0;
+    //curr->running = 0;
 }
 
 
 void wake_limited(struct mycfs_rq *mycfs_rq, struct rq *rq)
 {
     struct task_struct *p = mycfs_rq->wait_head;
-    
     if(p)
     {
         struct task_struct *next;
@@ -294,63 +329,24 @@ void wake_limited(struct mycfs_rq *mycfs_rq, struct rq *rq)
             p->intervalNum = mycfs_rq->intervalNum;
             p = next;
         }while(p);
+        
         mycfs_rq->wait_head = NULL;
-    }    
+    }
 }
-*  
- * we keep track of interval_data on every tick.  If a mycfs_rq task is not the current
- * then we still call this function with curr equal to NULL.  In that case just update the info
- * and maybe move all of the items off of the waiting list and reset each entities data.
- * 
- 
+/*
+* we keep track of interval_data on every tick. If a mycfs_rq task is not the current
+* then we still call this function with curr equal to NULL. In that case just update the info
+* and maybe move all of the items off of the waiting list and reset each entities data.
+*/
 void update_interval_data(struct mycfs_rq *mycfs_rq, struct rq *rq, struct task_struct *curr)
-{   
-    
-    //not sure if necessary if we can't initialize intervalTime
-    //even if you can't initialize clock then it would just make the first interval shorter on one tick.
-    if(mycfs_rq->intervalTime == 0)
-        mycfs_rq->intervalTime = rq->clock;
-
-    //if a task is running from mycfs_rq then update the tasks interval runtime.
-    if(curr)
-    {
-        //running keeps track of if this process was running the previous tick or not.
-        //if it was then we know lastTime is accurate but if not lastTime is junk.
-        //this misses a tick of time 
-        if(!curr->running)
-        {
-            curr->lastTime = rq->clock;
-            curr->running = 1;//remember to set this when stop running a task.
-        }
-        //somehow we have to update the interval time.
-        curr->intervalTime += rq->clock - curr->lastTime;
-        curr->lastTime = rq->clock;
-        
-        
-    }
-    
-        
-    if(rq->clock - mycfs_rq->intervalTime >100000)
-    {
-        mycfs_rq->intervalNum++;
-        wake_limited(mycfs_rq, rq);
-        
-        mycfs->intervalTime = rq->clock;
-        if(curr){
-            curr->intervalTime = 0;
-            curr->intervalNum = mycfs->intervalNum;
-        }
-        //Remember to update this numbers as we select a new entity to run.
-    }
-    
+{
+  
     //remember to add intervalTime and intervalNum to the mycfs_rq.
     //static task_struct *wait_head = NULL add to mycfs
     //check to see if the current procces is done.
     if(curr && (curr->intervalTime > curr->intervalLimit) && (curr->intervalLimit > 0))
     {
         //Pick the next task to run, and set it as curr.
-        
-        
         add_to_wait(mycfs, curr, &wait_head);
         mycfs_rq->curr = NULL;
         pick_next_task(rq);//not sure if this will work but what I think happens here
@@ -359,10 +355,8 @@ void update_interval_data(struct mycfs_rq *mycfs_rq, struct rq *rq, struct task_
                            //we are setting the current in mycfs_rq to NULL
     }
     
-    
-    
 }
-*/
+
 
 
 void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
