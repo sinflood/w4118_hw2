@@ -1721,6 +1721,9 @@ int wake_up_state(struct task_struct *p, unsigned int state)
  */
 static void __sched_fork(struct task_struct *p)
 {
+	
+	p->wait_next = NULL;
+	p->intervalTime = 0;
 	p->on_rq			= 0;
 
 	p->se.on_rq			= 0;
