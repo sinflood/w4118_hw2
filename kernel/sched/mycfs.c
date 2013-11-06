@@ -27,6 +27,7 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
   struct sched_entity *curr = mycfs_rq->curr;
   u64 now = mycfs_rq->rq->clock;
   unsigned long delta_exec;
+  if(mycfs_rq->lastTickTime == 0) mycfs_rq=>lastTickTime = now;//could cause a bug if 0 happens to be the last tick time. but that is unlikely.
   //not sure if necessary if we can't initialize intervalTime
     //even if you can't initialize clock then it would just make the first interval shorter or one tick.
    // if(mycfs_rq->intervalTime == 0)
@@ -146,6 +147,8 @@ static void enqueue_entity(struct mycfs_rq *mycfs_rq, struct sched_entity *se)
 	    se->vruntime = max_vruntime(se->vruntime, mycfs_rq->min_vruntime);
 
 	}*/
+	if(!se->on_rq)
+	    se->vruntime = mycfs_rq->min_vruntime;
 	
 	insert_tree(mycfs_rq, se);
 
@@ -239,8 +242,7 @@ static void yield_task_mycfs(struct rq *rq)
   update_curr(mycfs_rq);
   
   rq->skip_clock_update = 1;
-  dequeue_entity(mycfs_rq, se);
-  enqueue_entity(mycfs_rq, se);
+  resched_task(curr);
   //I believe this should work and schedule() call in sched_yeild() shoudl handle the rest.
   
 }
@@ -282,6 +284,7 @@ static void set_curr_task_mycfs(struct rq *rq)
 
 }
 
+void update_interval_data(struct mycfs_rq *mycfs_rq, struct rq *rq, struct task_struct *curr);
 /*
 This function is mostly called from time tick functions; it might lead to
    process switch.  This drives the running preemption.
@@ -292,8 +295,14 @@ static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
   //struct sched_entity *se = &curr->se;
 
   update_curr(mycfs_rq);
+  update_interval_data(mycfs_rq, rq, curr);
 //TODO check to see if curr has been running for longer than than the leftmost of the tree.  If it has then preempt the current process and then update bookeeping.
+  if(!curr) return;
   
+  //if there is more than one task and the timeslice is up reschedule.
+  //also if the queued we just reschedule because that's what fair says you do.
+  if((rq->clock - curr->start_exec > 10000/mycfs_rq->nrunning && mycfs_rq->nrunning > 1) || queued)
+      resched_task(rq->curr);
 
 }
 
@@ -367,6 +376,7 @@ void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
   /*part b stuff. */
   mycfs_rq->intervalTime = 0;
   mycfs_rq-> wait_head = NULL;
+  mycfs_rq->lastTickTime = 0;
 }
 
 /*
@@ -394,8 +404,9 @@ static void put_prev_entity(struct mycfs_rq *mycfs_rq, struct sched_entity *prev
          * If still on the runqueue then deactivate_task()
          * was not called and update_curr() has to be done:
          */
-        if (prev->on_rq)
-                update_curr(mycfs_rq);
+         //enqueue_entity calls update_curr so no need to call it twice
+       // if (prev->on_rq)
+         //       update_curr(mycfs_rq);
 
         /* throttle cfs_rqs exceeding runtime TODO Is this needed?*/
         //check_cfs_rq_runtime(mycfs_rq);
