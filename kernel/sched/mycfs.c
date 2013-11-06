@@ -611,7 +611,21 @@ select_task_rq_mycfs(struct task_struct *p, int sd_flag, int wake_flags)
 
 static void switched_to_mycfs(struct rq *rq, struct task_struct *p)
 {
-	mycfs_rq->curr = &p->se;
+
+	if (!p->se.on_rq)
+                return;
+
+        /*
+         * We were most likely switched from sched_rt, so
+         * kick off the schedule if running, otherwise just see
+         * if we can still preempt the current task.
+         */
+        if (rq->curr == p)
+                resched_task(rq->curr);
+        else
+                check_preempt_curr(rq, p, 0);
+
+	//rq->mycfs->curr = &p->se;
 }
 /*
  * the scheduling class methods:

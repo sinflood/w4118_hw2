@@ -1144,7 +1144,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	int retval;
 	struct task_struct *p;
 	int cgroup_callbacks_done = 0;
-
+	struct sched_entity *se;
 	if ((clone_flags & (CLONE_NEWNS|CLONE_FS)) == (CLONE_NEWNS|CLONE_FS))
 		return ERR_PTR(-EINVAL);
 
@@ -1465,8 +1465,10 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		nr_threads++;
 	}
         //PART B 
-        p->intervalTime = 0;
-        p->intervalLimit = 0;
+	se = &p->se;
+        se->intervalTime = 0;
+        se->intervalLimit = 0;
+	
 
 	total_forks++;
 	spin_unlock(&current->sighand->siglock);
