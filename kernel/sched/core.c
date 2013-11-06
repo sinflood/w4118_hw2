@@ -3046,6 +3046,10 @@ void scheduler_tick(void)
 	raw_spin_lock(&rq->lock);
 	update_rq_clock(rq);
 	update_cpu_load_active(rq);
+	
+	/*this is for partB, it calls mycfs taks_tick no matter what process is running.*/ 
+        if(curr->sched_class != &my_cfs_sched_class) mycfs_sched_class.task_tick(rq, NULL, 0); 
+        
 	curr->sched_class->task_tick(rq, curr, 0);
 	raw_spin_unlock(&rq->lock);
 
@@ -4065,7 +4069,7 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 	if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
 	else if(policy == 6)
-                p->sched_class = *mycfs_sched_class;
+                p->sched_class = &mycfs_sched_class;
         else
 		p->sched_class = &fair_sched_class;
 		
