@@ -611,7 +611,7 @@ select_task_rq_mycfs(struct task_struct *p, int sd_flag, int wake_flags)
 
 static void switched_to_mycfs(struct rq *rq, struct task_struct *p)
 {
-	enqueue_task(rq, p, 0;)
+	set_curr_task(rq);
 }
 /*
  * the scheduling class methods:
