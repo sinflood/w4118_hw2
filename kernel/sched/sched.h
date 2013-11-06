@@ -291,6 +291,8 @@ struct mycfs_rq {
 	struct task_struct *wait_head;
 	u64 intervalNum;
 	u64 intervalTime;
+	u64 lastTickTime;
+	
 	
 };//END MYCFS
 
