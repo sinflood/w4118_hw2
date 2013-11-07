@@ -171,6 +171,19 @@ static bool oom_unkillable_task(struct task_struct *p,
 	return false;
 }
 
+
+
+unsigned int total_user_alloc(uid u){
+	int mem = 0;
+	for_each_process(task_struct proc){
+		mem += get_mem_rss(proc)
+	}
+
+
+	return mem;
+
+
+}
 /**
  * oom_badness - heuristic function to determine which candidate task to kill
  * @p: task struct of which task we should calculate
@@ -204,6 +217,12 @@ unsigned int oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
 	if (!totalpages)
 		totalpages = 1;
 
+	//If we are using the per user memory limit, calculate the value here
+	if(p->user->mem_limit > 0){
+		//points = (currently allocated space for this user / max ) * 1000
+		points = total_user_alloc() / p->user->mem_limit * 1000;
+		return points;
+	}
 	/*
 	 * The baseline for the badness score is the proportion of RAM that each
 	 * task's rss, pagetable and swap space use.
