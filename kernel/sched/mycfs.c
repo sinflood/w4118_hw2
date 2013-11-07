@@ -43,7 +43,7 @@ static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime)
         //curr->lastTime = rq->clock;
     }
     mycfs_rq->intervalTime += now - mycfs_rq->lastTickTime;
-    if(mycfs_rq->intervalTime >100000)
+    if(mycfs_rq->intervalTime >100000000)
     {
         mycfs_rq->intervalNum++;
         wake_limited(mycfs_rq, mycfs_rq->rq);
@@ -264,7 +264,7 @@ static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
   
   //if there is more than one task and the timeslice is up reschedule.
   //also if the queued we just reschedule because that's what fair says you do.
-  if((rq->clock - curr->se.exec_start > 10000/mycfs_rq->nr_running && mycfs_rq->nr_running > 1) || queued)
+  if((rq->clock - curr->se.exec_start > 10000000/mycfs_rq->nr_running && mycfs_rq->nr_running > 1) || queued)
       resched_task(rq->curr);
 
 }

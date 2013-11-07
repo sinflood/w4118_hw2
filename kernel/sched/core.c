@@ -4120,7 +4120,7 @@ recheck:
 		//NEED TO ENABLE MYCFS POLICY
 		if (policy != SCHED_FIFO && policy != SCHED_RR &&
 				policy != SCHED_NORMAL && policy != SCHED_BATCH &&
-				policy != SCHED_IDLE && policy != SCHED_MYCFS)
+				policy != SCHED_IDLE && policy != 6)
 			return -EINVAL;
 	}
 
