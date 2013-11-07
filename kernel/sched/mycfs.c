@@ -19,7 +19,7 @@ static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime)
         if (delta < 0)
                 min_vruntime = vruntime;
 
-        return min_vruntime;
+        return min_vruntime;if(curr->sched_class != &mycfs_sched_class && rq->mycfs->nr_running)
 }
 
 static void update_curr(struct mycfs_rq *mycfs_rq)
@@ -34,7 +34,7 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
        // mycfs_rq->intervalTime = rq->clock;
 
     //if a task is running from mycfs_rq then update the tasks interval runtime.
-    if(curr)
+    if(curr && mycfs_rq->nr_running)
     {
         if(curr->intervalNum != mycfs_rq->intervalNum)
         {
@@ -56,6 +56,7 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
         curr->vruntime += now - mycfs_rq->lastTickTime;
         //curr->lastTime = rq->clock;
     }
+    mycfs_rq->intervalTime += now - mycfs_rq->lastTickTime;
     if(mycfs_rq->intervalTime >100000)
     {
         mycfs_rq->intervalNum++;
@@ -67,6 +68,7 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
         }
     //Remember to update this numbers as we select a new entity to run.
     }
+    
     mycfs_rq->lastTickTime = now;
 
 
@@ -319,6 +321,7 @@ void add_to_wait(struct mycfs_rq *mycfs_rq, struct task_struct *curr)
       mycfs_rq->wait_head = curr;
     //NOTE that curr's sched_entity should not be on the rb tree.
     }
+    curr.se->on_rq = 0;
     mycfs_rq->nr_running--;
     dec_nr_running(mycfs_rq->rq);
     //curr->running = 0;
