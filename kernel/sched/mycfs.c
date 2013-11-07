@@ -19,20 +19,16 @@ static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime)
         if (delta < 0)
                 min_vruntime = vruntime;
 
-        return min_vruntime;if(curr->sched_class != &mycfs_sched_class && rq->mycfs->nr_running)
+        return min_vruntime;
 }
 
-static void update_curr(struct mycfs_rq *mycfs_rq)
+ extern void update_curr(struct mycfs_rq *mycfs_rq)
 {
   struct sched_entity *curr = mycfs_rq->curr;
   u64 now = mycfs_rq->rq->clock;
   //unsigned long delta_exec;
   if(mycfs_rq->lastTickTime == 0) mycfs_rq->lastTickTime = now;//could cause a bug if 0 happens to be the last tick time. but that is unlikely.
-  //not sure if necessary if we can't initialize intervalTime
-    //even if you can't initialize clock then it would just make the first interval shorter or one tick.
-   // if(mycfs_rq->intervalTime == 0)
-       // mycfs_rq->intervalTime = rq->clock;
-
+  
     //if a task is running from mycfs_rq then update the tasks interval runtime.
     if(curr && mycfs_rq->nr_running)
     {
@@ -41,16 +37,6 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
             curr->intervalNum = mycfs_rq->intervalNum;
             curr->intervalTime = 0;
         }
-        //running keeps track of if this process was running the previous tick or not.
-        //if it was then we know lastTime is accurate but if not lastTime is junk.
-        //this misses a tick of time
-        /*if(!curr->running)
-        {
-            curr->lastTime = rq->clock;
-            curr->running = 1;//remember to set this when stop running a task.
-        }*/
-        //somehow we have to update the interval time.
-        
         
         curr->intervalTime += now - mycfs_rq->lastTickTime;
         curr->vruntime += now - mycfs_rq->lastTickTime;
@@ -71,14 +57,6 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
     
     mycfs_rq->lastTickTime = now;
 
-
-  //if(!delta_exec) return;
-
-  //curr->vruntime += delta_exec; //we don't have to worry about weighting the runtimes.
-
-  //not sure if we need anything else from the update curr from fair.c.
-
-  //schedstat_set(curr->exec_max, max((u64)delta_exec, curr->exec->max))
 }
 static void update_min_vruntime(struct mycfs_rq *mycfs_rq)
 {
@@ -139,21 +117,13 @@ static void insert_tree(struct mycfs_rq *mycfs_rq, struct sched_entity *se){
 */
 static void enqueue_entity(struct mycfs_rq *mycfs_rq, struct sched_entity *se)
 {
-	//if(!(flags & ENQUEUE_WAKEUP) /*|| (flags & ENQUEUE_MIGRATE)*/)
-	//    se->vruntime += mycfs_rq->min_vruntime;
-        
-        update_curr(mycfs_rq);
-        //update_min_vruntime(mycfs_rq);
-        /*if(flags & ENQUEUE_WAKEUP)
-	{
-	    se->vruntime = max_vruntime(se->vruntime, mycfs_rq->min_vruntime);
 
-	}*/
+    update_curr(mycfs_rq);
+   
 	if(!se->on_rq)
 	    se->vruntime = mycfs_rq->min_vruntime;
 	
 	insert_tree(mycfs_rq, se);
-
 	
 }
 
@@ -169,17 +139,8 @@ enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 	struct mycfs_rq *mycfs_rq = &rq->mycfs;
 	struct sched_entity *se= &p->se;
 	
-	/*
-	*  in fair.c I don't know why but it iterates over all the parent entities.  
-	*  It does the same thing but inside this loop: 
-	*  #define for_each_sched_entity(se) for (; se; se = se->parent)
-	*  for_each_sched_entity(se){
-	*    if(se->on_rq) break;
-	*  }
-	*/
-
-
-        mycfs_rq->nr_running++; //update the number of proccesses running.  
+	
+    mycfs_rq->nr_running++; //update the number of proccesses running.  
 	inc_nr_running(rq);
 
 	enqueue_entity(mycfs_rq, se);
@@ -321,7 +282,7 @@ void add_to_wait(struct mycfs_rq *mycfs_rq, struct task_struct *curr)
       mycfs_rq->wait_head = curr;
     //NOTE that curr's sched_entity should not be on the rb tree.
     }
-    curr.se->on_rq = 0;
+    curr->se.on_rq = 0;
     mycfs_rq->nr_running--;
     dec_nr_running(mycfs_rq->rq);
     //curr->running = 0;

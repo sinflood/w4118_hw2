@@ -3035,6 +3035,8 @@ void thread_group_times(struct task_struct *p, cputime_t *ut, cputime_t *st)
  * This function gets called by the timer code, with HZ frequency.
  * We call it with interrupts disabled.
  */
+ void update_curr(struct mycfs_rq *mycfs_rq);
+ 
 void scheduler_tick(void)
 {
 	int cpu = smp_processor_id();
@@ -3048,7 +3050,7 @@ void scheduler_tick(void)
 	update_cpu_load_active(rq);
 	
 	/*this is for partB, it calls mycfs taks_tick no matter what process is running.*/ 
-        if(curr->sched_class != &mycfs_sched_class) mycfs_sched_class.task_tick(rq, NULL, 0); 
+    if(curr->sched_class != &mycfs_sched_class && rq->mycfs.nr_running) update_curr(&rq->mycfs); 
         
 	curr->sched_class->task_tick(rq, curr, 0);
 	raw_spin_unlock(&rq->lock);
