@@ -53,6 +53,7 @@ static DEFINE_SPINLOCK(uidhash_lock);
 
 /* root_user.__count is 2, 1 for init task cred, 1 for init_user_ns->user_ns */
 struct user_struct root_user = {
+        .mem_max        = 0,
 	.__count	= ATOMIC_INIT(2),
 	.processes	= ATOMIC_INIT(1),
 	.files		= ATOMIC_INIT(0),
@@ -182,6 +183,8 @@ out_unlock:
 static int __init uid_cache_init(void)
 {
 	int n;
+
+	printk("inituid");
 
 	uid_cachep = kmem_cache_create("uid_cache", sizeof(struct user_struct),
 			0, SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
